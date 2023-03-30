@@ -1,0 +1,2 @@
+PROJECT_NAME = "Dream11"
+ENTITY = None
