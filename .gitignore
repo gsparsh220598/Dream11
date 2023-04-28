@@ -2,3 +2,5 @@ Inputs/*
 Scripts/wandb/*
 Outputs/*
 Literature/*
+.env
+```
