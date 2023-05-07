@@ -1,5 +1,13 @@
 # run sweep from command line
-# python run_sweep.py lgbm True paperspace 3 25
+# python run_sweep.py lgbm True local 3 1
+
+# make installations
+# !git clone --recursive https://github.com/microsoft/LightGBM
+# !cd LightGBM
+# !mkdir build
+# !cd build
+# !cmake -DUSE_CUDA=1 ..
+# !make -j4
 
 import os
 import pickle
@@ -62,6 +70,7 @@ from sklearn.ensemble import (
     BaggingClassifier,
 )
 from lightgbm import LGBMClassifier
+from xgboost import XGBClassifier
 from hyperparams import *
 from util import *
 
@@ -79,17 +88,21 @@ clfs = {
     "knn": KNeighborsClassifier(),
     "ada": AdaBoostClassifier(random_state=RANDOM_STATE),
     "et": ExtraTreesClassifier(random_state=RANDOM_STATE),
-    # "xgb": XGBClassifier(),
+    "xgb": XGBClassifier(
+        booster="gbtree", tree_method="hist", random_state=RANDOM_STATE
+    ),
 }
 
 # create argparser arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("model", type=str, default="lgbm")
-parser.add_argument("embedding", type=bool, default=True)
+parser.add_argument("embedding", type=str, default="no")
 parser.add_argument("environment", type=str, default="local")
 parser.add_argument("splits", type=int, default=3)
 parser.add_argument("iterations", type=int, default=1)
 args = parser.parse_args()
+
+print(args.embedding, args.iterations, args.model)
 
 if args.environment == "paperspace":
     os.chdir("/notebooks/Scripts")
@@ -103,37 +116,37 @@ run = wandb.init(
 )
 
 if args.environment == "local":
-    if args.embedding:
+    if args.embedding == "yes":
         train = pd.read_csv("../Inputs/ball-by-ball prediction/embfeats10K.csv")
     else:
-        train = pd.read_csv("../Inputs/ball-by-ball prediction/main.csv")
+        train = pd.read_csv("../Inputs/ball-by-ball prediction/main_5c.csv")
 else:
-    if args.embedding:
+    if args.embedding == "yes":
         train = pd.read_csv("embfeats10K.csv")
     else:
-        train = pd.read_csv("main.csv")
+        train = pd.read_csv("main_5c.csv")
 
-X_train, X_test, y_train, y_test = get_train_test_split(train)
-labels = np.array(
-    ["0_runs", "1_runs", "2_runs", "3_runs", "4_runs", "6_runs", "Wicket"], dtype=object
-)
+if args.embedding == "yes":
+    X_train, X_test, y_train, y_test = get_train_test_split(train)
+else:
+    X_train, X_test, y_train, y_test = get_train_test_split(train[:10000])
+
+# labels = np.array(
+#     ["0_runs", "1_runs", "2_runs", "3_runs", "4_runs", "6_runs", "Wicket"], dtype=object
+# )
+labels = train.target.unique().tolist()
 
 cat_features = X_train.select_dtypes(include=["object"]).columns
 num_features = X_train.select_dtypes(exclude=["object"]).columns
 
-if not args.embedding:
+if args.embedding == "no":
     numeric_transformer = Pipeline(
         [
-            # ('poly_feats', PolynomialFeatures(degree=2)),
-            # ('b_splines', SplineTransformer()),
+            ("poly", PolynomialFeatures(degree=2)),
+            ("splines", SplineTransformer()),
             ("scaler", StandardScaler()),
-            #   ('bin', KBinsDiscretizer(encode='ordinal')), #only improved Lars
-            (
-                "select_feats",
-                SelectFromModel(
-                    lm.Lasso(random_state=RANDOM_STATE), threshold="median"
-                ),
-            ),
+            ("bins", KBinsDiscretizer(encode="ordinal")),  # only improved Lars
+            ("feats", SelectFromModel(lm.Lasso(random_state=RANDOM_STATE))),
         ]
     )
     categorical_transformer = Pipeline(
@@ -152,20 +165,27 @@ if not args.embedding:
         ]
     )
 else:
-    preprocessor = Pipeline(
+    numeric_transformer = Pipeline(
         [
-            (
-                "select_feats",
-                SelectFromModel(
-                    lm.Lasso(random_state=RANDOM_STATE), threshold="median"
-                ),
-            )
+            ("poly", PolynomialFeatures(degree=2)),
+            ("splines", SplineTransformer()),
+            ("scaler", StandardScaler()),
+            ("bins", KBinsDiscretizer(encode="ordinal")),
+            ("feats", SelectFromModel(lm.Lasso(random_state=RANDOM_STATE))),
+        ]
+    )
+    preprocessor = ColumnTransformer(
+        transformers=[
+            # ('new_feats', CustomFeatureTransformer(), num_features),
+            ("num", numeric_transformer, num_features),
+            # ("cat", categorical_transformer, cat_features),
         ]
     )
 
+
 pipe = Pipeline(
     [
-        # ('prep', preprocessor),
+        ("prep", preprocessor),
         ("clf", clfs[args.model]),
     ]
 )
@@ -174,7 +194,7 @@ model = clfs[args.model].__class__.__name__
 cv = StratifiedKFold(n_splits=args.splits, shuffle=True, random_state=RANDOM_STATE)
 rs = RandomizedSearchCV(
     pipe,
-    gethps_(model=args.model),
+    params_wrapper(model=args.model, clf=True),
     n_iter=args.iterations,
     n_jobs=-1,
     cv=cv.split(X_train, y_train),
@@ -183,25 +203,26 @@ rs = RandomizedSearchCV(
 )
 rs.fit(X_train, y_train)
 
-wandb.summary[f"cv_f1_score_{model}"] = rs["test_score"].mean()
+# Log model performance
 
-predictions = rs["estimator"][0].predict(X_test)
-wandb.summary[f"accuracy_test_{model}"] = accuracy_score(y_test, predictions)
-wandb.summary[f"f1_score_test_{model}"] = f1_score(
-    y_test, predictions, average="weighted"
-)
-wandb.summary[f"precision_test_{model}"] = precision_score(
-    y_test, predictions, average="weighted"
-)
-wandb.summary[f"recall_test_{model}"] = recall_score(
-    y_test, predictions, average="weighted"
-)
+predictions = rs.predict(X_test)
 
-wandb.sklearn.plot_confusion_matrix(y_test, predictions, labels)
-wandb.sklearn.plot_roc(y_test, rs.predict_proba(preprocessor.transform(X_test)), labels)
-wandb.sklearn.plot_precision_recall(
-    y_test, rs.predict_proba(preprocessor.transform(X_test)), labels
+cm = wandb.plot.confusion_matrix(y_true=y_test, preds=predictions, class_names=labels)
+
+wandb.log(
+    {
+        f"cv_f1_score_{model}": rs.best_score_,
+        f"accuracy_test_{model}": accuracy_score(y_test, predictions),
+        f"f1_score_test_{model}": f1_score(y_test, predictions, average="weighted"),
+        f"recall_test_{model}": recall_score(y_test, predictions, average="weighted"),
+        f"precision_test_{model}": precision_score(
+            y_test, predictions, average="weighted"
+        ),
+        "best_params": rs.best_params_,
+        "conf_mat": cm,
+        # "pr_curve": wandb.plot.pr_curve(y_test, predictions),
+        # "roc": wandb.plot.roc_curve(y_test, predictions)
+    }
 )
-wandb.sklearn.plot_class_proportions(y_train, y_test, labels)
 
 run.finish()
