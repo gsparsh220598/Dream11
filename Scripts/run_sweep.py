@@ -42,6 +42,10 @@ from sklearn.feature_selection import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from imblearn.under_sampling import TomekLinks
+
+from imblearn.pipeline import Pipeline as imbPipeline
+
 from sklearn.metrics import (
     mean_absolute_error,
     r2_score,
@@ -111,25 +115,25 @@ run = wandb.init(
     project="Dream11",
     entity=None,
     job_type="modeling",
-    notes=f"Modelling the Dream11 dataset (~40 games) with {clfs[args.model]} (7 classes) with feature embeddings={args.embedding}",
-    # notes = "setting benchmark using a Naive Classifier",
+    notes=f"Modelling the ipl2022 dataset with {clfs[args.model]} (5 classes) with feature embeddings={args.embedding}",
+    tags=[f"niter{args.iterations}", f"model{args.model}", "ipl2022", "5_classes"],
 )
 
 if args.environment == "local":
     if args.embedding == "yes":
         train = pd.read_csv("../Inputs/ball-by-ball prediction/embfeats10K.csv")
     else:
-        train = pd.read_csv("../Inputs/ball-by-ball prediction/main_5c.csv")
+        train = pd.read_csv("../Inputs/ball-by-ball prediction/ipl2022.csv")
 else:
     if args.embedding == "yes":
         train = pd.read_csv("embfeats10K.csv")
     else:
-        train = pd.read_csv("main_5c.csv")
+        train = pd.read_csv("ipl2022.csv")
 
 if args.embedding == "yes":
     X_train, X_test, y_train, y_test = get_train_test_split(train)
 else:
-    X_train, X_test, y_train, y_test = get_train_test_split(train[:10000])
+    X_train, X_test, y_train, y_test = get_train_test_split(train)
 
 # labels = np.array(
 #     ["0_runs", "1_runs", "2_runs", "3_runs", "4_runs", "6_runs", "Wicket"], dtype=object
@@ -140,16 +144,17 @@ cat_features = X_train.select_dtypes(include=["object"]).columns
 num_features = X_train.select_dtypes(exclude=["object"]).columns
 
 if args.embedding == "no":
-    numeric_transformer = Pipeline(
+    numeric_transformer = imbPipeline(
         [
+            # ("log", LogTransformer()),
             ("poly", PolynomialFeatures(degree=2)),
-            ("splines", SplineTransformer()),
+            # ("splines", SplineTransformer()),
             ("scaler", StandardScaler()),
-            ("bins", KBinsDiscretizer(encode="ordinal")),  # only improved Lars
+            # ("bins", KBinsDiscretizer(encode="ordinal")),  # only improved Lars
             ("feats", SelectFromModel(lm.Lasso(random_state=RANDOM_STATE))),
         ]
     )
-    categorical_transformer = Pipeline(
+    categorical_transformer = imbPipeline(
         [
             (
                 "encoder",
@@ -159,31 +164,28 @@ if args.embedding == "no":
     )
     preprocessor = ColumnTransformer(
         transformers=[
-            # ('new_feats', CustomFeatureTransformer(), num_features),
             ("num", numeric_transformer, num_features),
             ("cat", categorical_transformer, cat_features),
         ]
     )
 else:
-    numeric_transformer = Pipeline(
+    preprocessor = imbPipeline(
         [
             ("poly", PolynomialFeatures(degree=2)),
-            ("splines", SplineTransformer()),
+            # ("splines", SplineTransformer()),
             ("scaler", StandardScaler()),
-            ("bins", KBinsDiscretizer(encode="ordinal")),
+            # ("bins", KBinsDiscretizer(encode="ordinal")),
             ("feats", SelectFromModel(lm.Lasso(random_state=RANDOM_STATE))),
         ]
     )
-    preprocessor = ColumnTransformer(
-        transformers=[
-            # ('new_feats', CustomFeatureTransformer(), num_features),
-            ("num", numeric_transformer, num_features),
-            # ("cat", categorical_transformer, cat_features),
-        ]
-    )
+    # preprocessor = ColumnTransformer(
+    #     transformers=[
+    #         ("num", numeric_transformer, num_features),
+    #     ]
+    # )
 
 
-pipe = Pipeline(
+pipe = imbPipeline(
     [
         ("prep", preprocessor),
         ("clf", clfs[args.model]),

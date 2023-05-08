@@ -7,6 +7,8 @@ import json
 
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.base import BaseEstimator, TransformerMixin
+from typing import Optional, Union
 
 PROJECT_NAME = "Dream11"
 ENTITY = None
@@ -92,6 +94,33 @@ replace_team_dict = {
     "Rising Pune Supergiant": "Rising Pune Supergiants",
     "Kings XI Punjab": "Punjab Kings",
 }
+
+
+class LogTransformer(BaseEstimator, TransformerMixin):
+    """
+    Custom log transformation that follows the Sklearn interface to be used in a Pipeline.
+    Example of a class that is inheriting from BaseEstimator & TransformerMixin. Therefore we have to implement fit(), transform(), and inverse_transform(). Note that fit_transform() is inherited from TransformerMixin.
+    """
+
+    def fit(
+        self, X: pd.DataFrame, y: Optional[Union[pd.DataFrame, pd.Series]] = None
+    ) -> "LogTransformer":
+        """Fit the LogTransformer on the data X."""
+        return self
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Apply log on all the cells of the DataFrame"""
+
+        X_log = np.log(X + 1e-27)
+
+        return X_log
+
+    def inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        """Inverse the log of every cell of the DataFrame"""
+
+        X_exp = np.exp(X) - 1e-27
+
+        return X_exp
 
 
 def get_train_test_split(df, target="target", test_size=0.1):

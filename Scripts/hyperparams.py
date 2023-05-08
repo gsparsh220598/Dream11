@@ -34,7 +34,7 @@ gbr_params = {
     "learning_rate": np.linspace(1e-3, 1.0, 40, dtype=np.float16),
     "criterion": ["friedman_mse", "squared_error"],
     # 'clf__bootstrap': [True, False],
-    "loss": ["log_loss", "exponential"],
+    "loss": ["log_loss"],
     "subsample": np.linspace(0.2, 1.0, 40, dtype=np.float16),
     # 'clf__ccp_alpha': np.linspace(0.0, 5.0, 10, dtype=np.float16),
     "warm_start": [True, False],
@@ -102,7 +102,7 @@ xgb_params = {
 }
 
 spline_params = {
-    "splines__degree": np.linspace(1, 5, 5, dtype=np.int16),
+    "splines__degree": np.linspace(1, 3, 3, dtype=np.int16),
     "splines__n_knots": np.linspace(2, 10, 10, dtype=np.int16),
     # "splines__include_bias": [True, False],
     # "splines__strategy": ["quantile", "uniform"],
@@ -115,7 +115,7 @@ kbins_params = {
 }
 
 poly_params = {
-    "poly__degree": np.linspace(1, 5, 5, dtype=np.int16),
+    "poly__degree": np.linspace(1, 3, 3, dtype=np.int16),
     "poly__interaction_only": [True, False],
     "poly__include_bias": [True, False],
 }
@@ -123,6 +123,7 @@ poly_params = {
 sfm_params = {
     "feats__threshold": ["mean", "median"],
 }
+
 
 # a function to append 'clf__' to the beginning of each parameter name
 def appendprix(params, prix="clf__"):
@@ -175,8 +176,8 @@ def gethps_(model, clf=True):
 
 def params_wrapper(model, clf=True):
     new_params = gethps_(model, clf)
-    prep_params = dict(kbins_params, **poly_params)
-    prep_params = dict(prep_params, **sfm_params)
-    prep_params = dict(prep_params, **spline_params)
+    prep_params = dict(sfm_params, **poly_params)
+    # prep_params = dict(prep_params, **sfm_params)
+    # prep_params = dict(prep_params, **spline_params)
     new_params.update(appendprix(prep_params, prix="prep__num__"))
     return new_params
