@@ -1,18 +1,14 @@
 import pandas as pd
 import numpy as np
 import glob
-from functools import lru_cache, cache
+from functools import lru_cache, cache, partial
+from sklearn.metrics import make_scorer, f1_score, precision_score
 import os
 import json
 
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.base import BaseEstimator, TransformerMixin
-from typing import Optional, Union
-
 PROJECT_NAME = "Dream11"
 ENTITY = None
-RANDOM_STATE = 42
+
 
 replace_venue_dict = {
     "M Chinnaswamy Stadium, Bangalore": "M Chinnaswamy Stadium",
@@ -94,42 +90,6 @@ replace_team_dict = {
     "Rising Pune Supergiant": "Rising Pune Supergiants",
     "Kings XI Punjab": "Punjab Kings",
 }
-
-
-class LogTransformer(BaseEstimator, TransformerMixin):
-    """
-    Custom log transformation that follows the Sklearn interface to be used in a Pipeline.
-    Example of a class that is inheriting from BaseEstimator & TransformerMixin. Therefore we have to implement fit(), transform(), and inverse_transform(). Note that fit_transform() is inherited from TransformerMixin.
-    """
-
-    def fit(
-        self, X: pd.DataFrame, y: Optional[Union[pd.DataFrame, pd.Series]] = None
-    ) -> "LogTransformer":
-        """Fit the LogTransformer on the data X."""
-        return self
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Apply log on all the cells of the DataFrame"""
-
-        X_log = np.log(X + 1e-27)
-
-        return X_log
-
-    def inverse_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """Inverse the log of every cell of the DataFrame"""
-
-        X_exp = np.exp(X) - 1e-27
-
-        return X_exp
-
-
-def get_train_test_split(df, target="target", test_size=0.1):
-    le = LabelEncoder()
-    X, y = df.drop(target, axis=1), le.fit_transform(df[target])
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, shuffle=True, random_state=RANDOM_STATE
-    )
-    return X_train, X_test, y_train, y_test
 
 
 def get_json_info(jsondata):
@@ -242,7 +202,7 @@ def collate_datasets(kinds):
 
 def get_player_dict():
     player_dict = {}
-    kinds = ["ipl", "t20s"]
+    kinds = ["ipl"]
     for kind in kinds:
         path_json = f"../Inputs/{kind}_json"
         json_files = [
@@ -330,3 +290,25 @@ def clean_data(df):
     df = df.set_index("delivery_id")
     df = df.drop(["match_id"], axis=1)
     return df
+
+
+def custom_scorer(y_true, y_pred, important_classes):
+    # Compute F1 score for all classes
+    f1 = f1_score(y_true, y_pred, average=None)
+
+    # Create a mask for important classes
+    mask = [1 if c in important_classes else 0 for c in range(len(f1))]
+
+    # Compute weighted F1 score
+    weighted_f1 = (f1 * mask).sum() / sum(mask)
+
+    return weighted_f1
+
+
+def get_custom_scorer(important_classes):
+    # Create partial function with important_classes argument
+    custom_scorer_partial = partial(custom_scorer, important_classes=important_classes)
+    custom_scorer_partial.__name__ = "custom_f1"
+    # Create scorer object
+    custom_scorer_obj = make_scorer(custom_scorer_partial, greater_is_better=True)
+    return custom_scorer_obj

@@ -5,21 +5,38 @@ import os
 
 # os.chdir("/notebooks/Scripts")
 
+# the following is the list of all the arguments that we want to run -> (model, embedding, environment, splits, iterations, log, usalgo)lr
+
 args_list = [
-    # ("xgb", "yes", "local", 3, 1),
-    # ("lgbm", "yes", "local", 3, 100),
-    # ("gbr", "yes", "local", 3, 100),
-    # ("et", "yes", "local", 3, 100),
-    # ("bag", "yes", "local", 3, 100),
-    # ("rf", "yes", "local", 3, 100),
-    ("xgb", "no", "local", 3, 20),
-    ("lgbm", "no", "local", 3, 20),
-    ("gbr", "no", "local", 3, 20),
-    # ("et", "no", "local", 3, 20),
-    ("bag", "no", "local", 3, 20),
-    ("rf", "no", "local", 3, 20),
-    # ('svc', 'no', 'paperspace', 3, 100)
+    ("xgb", "no", "local", 3, 20, "yes", "tomek"),
+    ("lgbm", "no", "local", 3, 20, "yes", "tomek"),
+    ("xgb", "no", "local", 3, 20, "yes", "nm"),
+    ("lgbm", "no", "local", 3, 20, "yes", "nm"),
+    # ("xgb", "no", "local", 3, 20, "yes", "cnn"),
+    # ("lgbm", "no", "local", 3, 20, "yes", "cnn"),
+    ("xgb", "no", "local", 3, 20, "yes", "rus"),
+    ("lgbm", "no", "local", 3, 20, "yes", "rus"),
+    ("xgb", "no", "local", 3, 20, "yes", "enn"),
+    ("lgbm", "no", "local", 3, 20, "yes", "enn"),
+    ("xgb", "no", "local", 3, 20, "yes", "renn"),
+    ("lgbm", "no", "local", 3, 20, "yes", "renn"),
+    ("xgb", "no", "local", 3, 20, "yes", "allknn"),
+    ("lgbm", "no", "local", 3, 20, "yes", "allknn"),
+    ("xgb", "no", "local", 3, 20, "yes", "iht"),
+    ("lgbm", "no", "local", 3, 20, "yes", "iht"),
+    ("xgb", "no", "local", 3, 20, "yes", "ncr"),
+    ("lgbm", "no", "local", 3, 20, "yes", "ncr"),
+    ("xgb", "no", "local", 3, 20, "yes", "none"),
+    ("lgbm", "no", "local", 3, 20, "yes", "none"),
 ]
+
+# args_list = [
+#     ("xgb", "no", "local", 3, 50, "yes", "none"),
+#     ("lgbm", "no", "local", 3, 50, "yes", "none"),
+#     # ("knn", "no", "local", 3, 50, "yes", "none"),
+#     # ("et", "no", "local", 3, 50, "yes", "none"),
+#     # ("svc", "no", "local", 3, 20, "yes", "none"),
+# ]
 
 for args in args_list:
     subprocess.run(
@@ -32,6 +49,10 @@ for args in args_list:
         + " "
         + str(args[3])
         + " "
-        + str(args[4]),
+        + str(args[4])
+        + " "
+        + str(args[5])
+        + " "
+        + str(args[6]),
         shell=True,
     )
